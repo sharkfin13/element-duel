@@ -49,6 +49,12 @@ input,select{font:inherit;padding:7px 9px;border-radius:7px;border:1px solid #3b
 .civpick label{padding:6px 10px;border-radius:8px;cursor:pointer;color:#14172a;font-weight:700;opacity:.45}
 .civpick input{display:none}
 .civpick label.on{opacity:1;outline:3px solid #ffd866}
+.card.spell{border-style:dashed;border-color:#14172acc}
+.dtile{display:flex;flex-direction:column;align-items:center;gap:4px}
+.dctl{display:flex;gap:6px;align-items:center;font-weight:700}
+.dctl button{padding:1px 9px}
+.dgrid{display:flex;flex-wrap:wrap;gap:12px;max-height:520px;overflow:auto;padding:10px 4px}
+.fbtn.on{outline:3px solid #ffd866}
 @media(max-width:560px){.card{width:64px;height:96px;font-size:9px}.card .nm{font-size:10px}}
 </style>
 </head>
@@ -60,11 +66,20 @@ input,select{font:inherit;padding:7px 9px;border-radius:7px;border:1px solid #3b
  <div id="lobby">
   <div class="panel">
    <div class="row"><b>名前</b><input id="myname" maxlength="10" value="プレイヤー" style="width:140px"></div>
-   <p style="margin:12px 0 6px"><b>デッキの文明を2つ選ぶ</b>(各文明10種×2枚=40枚)</p>
+   <p style="margin:12px 0 6px"><b>使うデッキ</b></p>
+   <div class="row" style="margin-bottom:8px"><label><input type="radio" name="dm" value="auto"> 自動(下で選んだ2文明の全カード1枚ずつ=40枚)</label></div>
+   <div class="row" style="margin-bottom:8px"><label><input type="radio" name="dm" value="custom"> マイデッキ <b id="dcount"></b></label><button class="sub" id="btnDeck">🃏 デッキを組む</button></div>
+   <div class="muted" style="margin-bottom:4px">自動デッキの文明(2つ)</div>
    <div class="civpick" id="civpick"></div>
    <div class="row" style="margin-top:14px">
     <button id="btnCpu">🤖 CPUと対戦</button>
    </div>
+  </div>
+  <div class="panel" id="deckEd" style="display:none">
+   <div class="row"><b>🃏 デッキ編集</b><span id="dtotal" style="font-weight:700"></span><button class="sub" id="dAuto">自動で埋める</button><button class="sub" id="dClear">クリア</button><button id="dClose">閉じる</button></div>
+   <div class="muted" style="margin:4px 0">40枚ちょうど・同名カードは4枚まで。変更は自動で保存されます。</div>
+   <div class="row" id="dfilter"></div>
+   <div class="dgrid" id="dgrid"></div>
   </div>
   <div class="panel">
    <b>🌐 オンライン対戦(2人・別のPCでもOK)</b>
@@ -85,7 +100,9 @@ input,select{font:inherit;padding:7px 9px;border-radius:7px;border:1px solid #3b
    ・シールド5枚、手札5枚で開始。相手のシールドを全て割って、直接攻撃で勝利。<br>
    ・毎ターン:カードを1枚引く → マナに1枚置く(1ターン1回) → クリーチャーを召喚(コスト分のマナをタップ、その文明のマナが1つ以上必要) → 攻撃。<br>
    ・攻撃先はプレイヤーか相手のタップ中クリーチャー。パワーが高い方が勝ち、同じなら相打ち。<br>
-   ・ブロッカー:攻撃されたとき、タップしていなければ身代わりに戦える。<br>
+   ・ブロッカー:攻撃されたとき、タップしていなければ身代わりに戦える。ブロックしたらタップし、次の自分のターンまでブロックできない。<br>
+   ・呪文:コストを払って唱えると効果を使い、墓地へ行く。S・トリガー:シールドが割られたとき、使うか選べて、コスト無しで出せる/唱えられる。<br>
+   ・デッキは自分で40枚(同名4枚まで)組めます。<br>
    ・スピードアタッカー:出したターンから攻撃可。Wブレイカー:シールドを2枚割る。召喚酔い 💤 のクリーチャーは攻撃不可。<br>
    ・登場時効果の対象は自動で選ばれます(最もパワーの高い対象)。山札が尽きると負け。
   </div>
@@ -115,10 +132,26 @@ const RAW=[
 ['l','天空の審判',5,5000,'B'],['l','白銀のパラディン',5,4000,'',['tap',0]],['l','聖なる大天使',6,6000,'W'],['l','光輝の聖竜',7,8000,'BW'],['l','創世神ゼウス・ライト',8,9000,'W',['shield',0]],
 ['d','ヤミ・コウモリ',2,1000,'',['disc',0]],['d','ゾンビ・ソルジャー',3,3000],['d','暗黒の剣士',3,2000,'S'],['d','影のアサシン',4,3000,'',['kill',3000]],['d','ボーン・ドラゴン',5,5000],
 ['d','死神グリム',5,4000,'',['kill',4000]],['d','魔王の使い',6,6000,'W'],['d','ナイトメア・デーモン',6,5000,'',['disc',0]],['d','冥界竜',7,8000,'W'],['d','闇帝ダークネス',8,9000,'W',['kill',6000]]
+,
+['f','ホムラ・ネズミ',1,1000,'S'],['f','烈火の剣豪',4,4000,'S'],['f','炎熱のワイバーン',5,6000],['f','マグマ・タイタン',6,7000],['f','爆炎皇帝ヴォルカ',7,8000,'W',['kill',3000]],
+['w','潮騒の番人',2,2000,'BT'],['w','霧の魔導士',4,3000,'',['draw',1]],['w','波動の皇帝',5,4000,'',['bounce',0]],['w','氷河のマンモス',6,7000],['w','嵐を呼ぶ龍',7,7000,'',['tap',0]],
+['n','芽吹きのリス',1,1000,'',['ramp',1]],['n','野生のライオン',3,4000],['n','岩肌のゴーレム',5,6000,'BT'],['n','大樹の守り人',6,6000,'B',['ramp',1]],['n','太古の恐竜王',7,9000,'W'],
+['l','見習い僧兵',1,1000,'BT'],['l','光の祈り手',3,2000,'',['tap',0]],['l','光の聖騎士長',4,4000,'B'],['l','シャイン・ユニコーン',5,5000,'S'],['l','救世主アルカディア',7,7000,'BS',['shield',1]],
+['d','ガイコツ・スレイブ',1,1000],['d','呪われた魔女',3,2000,'',['kill',2000]],['d','亡霊の騎士',4,4000,'',['disc',1]],['d','地獄の番犬',5,6000,'T'],['d','終焉の魔神',8,10000,'W',['disc',2]]
 ];
-const CARDS=RAW.map(r=>({civ:r[0],n:r[1],cost:r[2],pow:r[3],kw:r[4]||'',etb:r[5]||null}));
-const KWN={B:'ブロッカー',S:'スピードアタッカー',W:'Wブレイカー'};
-function etbText(e){if(!e)return'';const[t,n]=e;return{draw:`登場時:${n}枚引く`,ramp:'登場時:山札の上をマナへ',kill:`登場時:パワー${n}以下の敵を破壊`,tap:'登場時:敵1体をタップ',disc:'登場時:相手の手札を1枚捨てる',shield:'登場時:山札の上をシールドへ'}[t]}
+const SPELLS=[
+['f','ファイア・ボール',2,'T',['kill',2000]],['f','レッド・ストライク',3,'',['kill',4000]],['f','ヘル・フレイム',4,'',['kill',5000]],['f','バーニング・ウェーブ',5,'',['wipe',3000]],['f','業火の裁き',7,'T',['wipe',6000]],
+['w','リバース・タイド',2,'T',['bounce',0]],['w','ブレイン・ストーム',3,'',['draw',2]],['w','フリーズ・ゲート',3,'T',['tapall',0]],['w','凍てつく霧',4,'',['tapall',0]],['w','大波のうねり',5,'',['draw',3]],
+['n','リーフ・ブースト',2,'',['ramp',1]],['n','ジャングル・トラップ',2,'T',['tapall',0]],['n','ナチュラル・ブースト',3,'',['ramp',2]],['n','森の恵み',3,'',[['ramp',1],['draw',1]]],['n','大地の目覚め',4,'',['revive',0]],
+['l','ホーリー・シールド',3,'T',['shield',1]],['l','サンライト・バースト',4,'T',['tapall',0]],['l','光の癒やし',2,'',[['shield',1],['draw',1]]],['l','聖なる裁き',5,'',['wipe',4000]],['l','ヘブンズ・ゲート',5,'T',['shield',2]],
+['d','ダーク・ハンド',2,'T',['disc',1]],['d','リバイブ・ソウル',3,'',['revive',0]],['d','闇の誘惑',3,'',[['disc',1],['draw',1]]],['d','デス・スマイト',5,'T',['killany',0]],['d','冥府の裁き',6,'',[['killany',0],['disc',1]]]
+];
+const CARDS=RAW.map(r=>({civ:r[0],n:r[1],cost:r[2],pow:r[3],kw:r[4]||'',etb:r[5]||null,sp:false})).concat(SPELLS.map(r=>({civ:r[0],n:r[1],cost:r[2],pow:0,kw:r[3]||'',etb:r[4],sp:true})));
+const KWN={B:'ブロッカー',S:'スピードアタッカー',W:'Wブレイカー',T:'S・トリガー'};
+const ETB_T={draw:n=>`${n}枚引く`,ramp:n=>`山札の上${n||1}枚をアンタップマナへ`,kill:n=>`パワー${n}以下の敵1体を破壊`,tap:()=>'敵1体をタップ',disc:n=>`相手の手札を${n||1}枚捨てる`,shield:n=>`山札の上${n||1}枚をシールドへ`,bounce:()=>'敵1体を手札に戻す',tapall:()=>'敵を全てタップ',killany:()=>'敵1体を破壊',revive:()=>'墓地のクリーチャー1体を手札へ',wipe:n=>`パワー${n}以下の全クリーチャーを破壊`};
+const effs=e=>!e?[]:Array.isArray(e[0])?e:[e];
+function etbText(e){return effs(e).map(([t,n])=>ETB_T[t](n)).join(' + ')}
+function cardText(d){const t=etbText(d.etb);return t?(d.sp?'':'登場時:')+t:''}
 
 // ===== ゲームエンジン(ホストのみ実行) =====
 const R=n=>Math.floor(Math.random()*n);
@@ -126,26 +159,43 @@ const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=R(i+1);[a[i],a[j]]=[a[j]
 let UID=1;
 const mk=c=>({c,u:UID++,tp:0,sk:0});
 function normCivs(c){c=[...new Set(c)];const all=Object.keys(CIV);while(c.length<2){const x=all[R(5)];if(!c.includes(x))c.push(x)}return c.slice(0,2)}
-function buildDeck(civs){const d=[];CARDS.forEach((x,i)=>{if(civs.includes(x.civ)){d.push(mk(i));d.push(mk(i))}});return shuffle(d)}
-function mkP(civs){const deck=buildDeck(normCivs(civs));const sh=deck.splice(0,5),hand=deck.splice(0,5);return{deck,sh,hand,mana:[],bf:[],gv:[]}}
+function autoDeck(civs){civs=normCivs(civs);const d=[];CARDS.forEach((x,i)=>{if(civs.includes(x.civ))d.push(i)});return d}
+function okDeck(d){if(!Array.isArray(d)||d.length!==40)return false;const c={};for(const i of d){if(!Number.isInteger(i)||i<0||i>=CARDS.length)return false;c[i]=(c[i]||0)+1;if(c[i]>4)return false}return true}
+function mkP(d){const deck=shuffle(d.map(mk));const sh=deck.splice(0,5),hand=deck.splice(0,5);return{deck,sh,hand,mana:[],bf:[],gv:[]}}
 function lg(S,t){S.log.push(t);if(S.log.length>30)S.log.shift()}
 function newGame(names,civsA,civsB){const S={turn:0,winner:null,pend:null,mc:0,log:[],names,first:true,p:[mkP(civsA),mkP(civsB)]};lg(S,'ゲーム開始!');startTurn(S);return S}
 function draw(S,pi){const p=S.p[pi];if(!p.deck.length){S.winner=1-pi;lg(S,`${S.names[pi]}は山札が尽きた!`);return}p.hand.push(p.deck.shift())}
 function startTurn(S){const p=S.p[S.turn];p.mana.forEach(m=>m.tp=0);p.bf.forEach(b=>{b.tp=0;b.sk=0});S.mc=0;lg(S,`── ${S.names[S.turn]}のターン ──`);if(S.first)S.first=false;else draw(S,S.turn)}
 function kill(S,o,u){const p=S.p[o],i=p.bf.findIndex(x=>x.u===u);if(i<0)return;const c=p.bf.splice(i,1)[0];p.gv.push(c);lg(S,`${CARDS[c.c].n}が破壊された`)}
 function battle(S,ao,x,dof,y){const px=CARDS[x.c].pow,py=CARDS[y.c].pow;lg(S,`${CARDS[x.c].n}(${px}) vs ${CARDS[y.c].n}(${py})`);if(px>py)kill(S,dof,y.u);else if(px<py)kill(S,ao,x.u);else{kill(S,dof,y.u);kill(S,ao,x.u)}}
-function breakSh(S,ap,x){const d=S.p[1-ap];if(!d.sh.length){S.winner=ap;lg(S,`${S.names[ap]}のダイレクトアタック!`);return}const n=CARDS[x.c].kw.includes('W')?2:1;for(let i=0;i<n&&d.sh.length;i++)d.hand.push(d.sh.shift());lg(S,`${S.names[1-ap]}のシールドを${n>1?'2枚':'1枚'}ブレイク!`)}
-function resolveAtk(S,blockU){const pd=S.pend;S.pend=null;const x=S.p[pd.ap].bf.find(b=>b.u===pd.a);if(!x)return null;if(blockU){const y=S.p[pd.d].bf.find(b=>b.u===blockU);lg(S,'ブロック!');battle(S,pd.ap,x,pd.d,y)}else breakSh(S,pd.ap,x);return null}
-function etb(S,pi,e){if(!e)return;const[t,n]=e,me=S.p[pi],op=S.p[1-pi];
- if(t==='draw')for(let i=0;i<n;i++)draw(S,pi);
- else if(t==='ramp'){if(me.deck.length){const m=me.deck.shift();m.tp=1;me.mana.push(m);lg(S,'マナが増えた')}}
- else if(t==='kill'){const c=op.bf.filter(b=>CARDS[b.c].pow<=n).sort((a,b)=>CARDS[b.c].pow-CARDS[a.c].pow)[0];if(c)kill(S,1-pi,c.u)}
- else if(t==='tap'){const c=op.bf.filter(b=>!b.tp).sort((a,b)=>CARDS[b.c].pow-CARDS[a.c].pow)[0];if(c){c.tp=1;lg(S,`${CARDS[c.c].n}がタップされた`)}}
- else if(t==='disc'){if(op.hand.length){const c=op.hand.splice(R(op.hand.length),1)[0];op.gv.push(c);lg(S,`手札を1枚捨てさせた`)}}
- else if(t==='shield'){if(me.deck.length){me.sh.push(me.deck.shift());lg(S,'シールドが増えた')}}}
+function breakSh(S,ap,n,first){const d=S.p[1-ap];
+ if(first&&!d.sh.length){S.winner=ap;lg(S,`${S.names[ap]}のダイレクトアタック!`);return}
+ while(n>0&&d.sh.length){const c=d.sh.shift();n--;lg(S,`${S.names[1-ap]}のシールドをブレイク!`);
+  if(CARDS[c.c].kw.includes('T')){S.pend={k:'trig',d:1-ap,ap,card:c,left:n};lg(S,'⚡シールド・トリガー!');return}
+  d.hand.push(c)}}
+function resolveTrig(S,use){const pd=S.pend;S.pend=null;const d=S.p[pd.d],c=pd.card,cd=CARDS[c.c];
+ if(use){lg(S,`${S.names[pd.d]}が「${cd.n}」を発動!`);c.tp=0;if(cd.sp){d.gv.push(c)}else{c.sk=1;d.bf.push(c)}etb(S,pd.d,cd.etb)}else d.hand.push(c);
+ if(S.winner===null&&pd.left>0)breakSh(S,pd.ap,pd.left,false);return null}
+function resolveAtk(S,blockU){const pd=S.pend;S.pend=null;const x=S.p[pd.ap].bf.find(b=>b.u===pd.a);if(!x)return null;
+ if(blockU){const y=S.p[pd.d].bf.find(b=>b.u===blockU);y.tp=1;lg(S,'ブロック!');battle(S,pd.ap,x,pd.d,y)}else breakSh(S,pd.ap,CARDS[x.c].kw.includes('W')?2:1,true);return null}
+function etb(S,pi,e){for(const[t,n]of effs(e)){if(S.winner!==null)return;eff(S,pi,t,n)}}
+function eff(S,pi,t,n){const me=S.p[pi],op=S.p[1-pi];const strong=l=>l.slice().sort((a,b)=>CARDS[b.c].pow-CARDS[a.c].pow)[0];
+ if(t==='draw'){for(let i=0;i<n;i++)draw(S,pi)}
+ else if(t==='ramp'){for(let i=0;i<(n||1);i++)if(me.deck.length){const m=me.deck.shift();m.tp=0;me.mana.push(m);lg(S,'アンタップのマナが増えた')}}
+ else if(t==='kill'){const c=strong(op.bf.filter(b=>CARDS[b.c].pow<=n));if(c)kill(S,1-pi,c.u)}
+ else if(t==='killany'){const c=strong(op.bf);if(c)kill(S,1-pi,c.u)}
+ else if(t==='tap'){const c=strong(op.bf.filter(b=>!b.tp));if(c){c.tp=1;lg(S,`${CARDS[c.c].n}がタップされた`)}}
+ else if(t==='tapall'){op.bf.forEach(b=>b.tp=1);lg(S,'相手のクリーチャーを全てタップ')}
+ else if(t==='bounce'){const c=strong(op.bf);if(c){op.bf.splice(op.bf.indexOf(c),1);c.tp=0;c.sk=0;op.hand.push(c);lg(S,`${CARDS[c.c].n}が手札に戻された`)}}
+ else if(t==='disc'){for(let i=0;i<(n||1);i++)if(op.hand.length){op.gv.push(op.hand.splice(R(op.hand.length),1)[0]);lg(S,'手札を1枚捨てさせた')}}
+ else if(t==='shield'){for(let i=0;i<(n||1);i++)if(me.deck.length){me.sh.push(me.deck.shift());lg(S,'シールドが増えた')}}
+ else if(t==='revive'){const c=me.gv.filter(x=>!CARDS[x.c].sp).sort((a,b)=>CARDS[b.c].cost-CARDS[a.c].cost)[0];if(c){me.gv.splice(me.gv.indexOf(c),1);me.hand.push(c);lg(S,`${CARDS[c.c].n}を手札に戻した`)}}
+ else if(t==='wipe'){[0,1].forEach(o=>S.p[o].bf.filter(b=>CARDS[b.c].pow<=n).forEach(b=>kill(S,o,b.u)))}}
 function act(S,pi,a){
  if(S.winner!==null)return'ゲームは終了しています';
- if(S.pend){if(pi!==S.pend.d)return'相手の選択待ちです';const d=S.p[pi];
+ if(S.pend){if(pi!==S.pend.d)return'相手の選択待ちです';
+  if(S.pend.k==='trig'){if(a.t==='trig')return resolveTrig(S,!!a.use);return'シールド・トリガーを使うか選んでください'}
+  const d=S.p[pi];
   if(a.t==='noblock')return resolveAtk(S,null);
   if(a.t==='block'){const b=d.bf[a.i];if(!b||b.tp||!CARDS[b.c].kw.includes('B'))return'ブロックできません';return resolveAtk(S,b.u)}
   return'ブロックするか選んでください'}
@@ -157,20 +207,20 @@ function act(S,pi,a){
   const first=un.find(m=>CARDS[m.c].civ===d.civ);if(!first)return`${CIV[d.civ].n}文明のマナが必要です`;
   first.tp=1;const rest=un.filter(m=>m!==first).sort((p,q)=>(CARDS[p.c].civ===d.civ)-(CARDS[q.c].civ===d.civ));
   for(let i=0;i<d.cost-1;i++)rest[i].tp=1;
-  me.hand.splice(a.i,1);c.tp=0;c.sk=1;me.bf.push(c);lg(S,`${S.names[pi]}が${d.n}を召喚`);etb(S,pi,d.etb);return null}
+  me.hand.splice(a.i,1);c.tp=0;if(d.sp){me.gv.push(c);lg(S,`${S.names[pi]}が呪文「${d.n}」を唱えた`)}else{c.sk=1;me.bf.push(c);lg(S,`${S.names[pi]}が${d.n}を召喚`)}etb(S,pi,d.etb);return null}
  if(a.t==='attack'){const x=me.bf[a.ci];if(!x||x.tp)return'攻撃できません';if(x.sk&&!CARDS[x.c].kw.includes('S'))return'召喚酔い中です';
   if(a.tg==='c'){const y=op.bf[a.ti];if(!y||!y.tp)return'タップ中のクリーチャーだけ攻撃できます';x.tp=1;battle(S,pi,x,1-pi,y);return null}
-  x.tp=1;S.pend={a:x.u,d:1-pi,ap:pi};lg(S,`${CARDS[x.c].n}がプレイヤーを攻撃!`);
+  x.tp=1;S.pend={k:'block',a:x.u,d:1-pi,ap:pi};lg(S,`${CARDS[x.c].n}がプレイヤーを攻撃!`);
   if(!op.bf.some(b=>!b.tp&&CARDS[b.c].kw.includes('B')))return resolveAtk(S,null);return null}
  if(a.t==='end'){S.turn=1-S.turn;startTurn(S);return null}
  return'不明な操作'}
 const w=c=>[c.c,c.tp,c.sk,c.u];
-function view(S,v){return{turn:S.turn,winner:S.winner,pend:S.pend?{d:S.pend.d}:null,mc:S.mc,log:S.log.slice(-6),names:S.names,
+function view(S,v){return{turn:S.turn,winner:S.winner,pend:S.pend?{d:S.pend.d,k:S.pend.k,c:S.pend.card?S.pend.card.c:null}:null,mc:S.mc,log:S.log.slice(-6),names:S.names,
  p:S.p.map((p,i)=>({sh:p.sh.length,hand:i===v?p.hand.map(w):p.hand.length,mana:p.mana.map(w),bf:p.bf.map(w),dn:p.deck.length,gv:p.gv.length}))}}
 
 // ===== CPU =====
 function aiStep(){const S=G;if(!S||S.winner!==null||mode!=='cpu')return;const me=S.p[1],op=S.p[0];
- if(S.pend){if(S.pend.d!==1)return;const bs=me.bf.map((b,i)=>[b,i]).filter(([b])=>!b.tp&&CARDS[b.c].kw.includes('B')).sort((a,b)=>CARDS[b[0].c].pow-CARDS[a[0].c].pow);
+ if(S.pend){if(S.pend.d!==1)return;if(S.pend.k==='trig')return apply(1,{t:'trig',use:true});const bs=me.bf.map((b,i)=>[b,i]).filter(([b])=>!b.tp&&CARDS[b.c].kw.includes('B')).sort((a,b)=>CARDS[b[0].c].pow-CARDS[a[0].c].pow);
   return apply(1,bs.length&&Math.random()<.75?{t:'block',i:bs[0][1]}:{t:'noblock'})}
  if(S.turn!==1)return;
  if(!S.mc&&me.hand.length){const have=new Set(me.mana.map(m=>CARDS[m.c].civ));
@@ -191,7 +241,7 @@ let aiT=null;
 function scheduleAI(){if(mode!=='cpu'||!G||G.winner!==null)return;if((G.turn===1&&!G.pend)||(G.pend&&G.pend.d===1)){clearTimeout(aiT);aiT=setTimeout(aiStep,850)}}
 
 // ===== 通信・状態 =====
-let G=null,mode=null,ME=0,V=null,resendT=null;
+let G=null,mode=null,ME=0,V=null,room=null,myPid=Math.random().toString(36).slice(2,10),myT=Date.now(),guestPid=null,resendT=null,inRoom=false;
 const $=id=>document.getElementById(id);
 function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2000)}
 function apply(pi,a){const err=act(G,pi,a);if(err){if(pi===ME||mode==='cpu'&&pi===0)toast(err);else if(mode==='host'&&conn&&conn.open)conn.send({t:'err',m:err});return}pushState();scheduleAI()}
@@ -203,8 +253,8 @@ function send(a){sel=null;if(mode==='guest'){if(conn&&conn.open)conn.send({t:'ac
 let sel=null;
 function el(tag,cls,html){const e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function cardEl(c,cls){const d=CARDS[c[0]];const e=el('div','card '+CIV[d.civ].c+' '+(cls||'')+(c[1]?' tp':'')+(c[2]?' sk':''));
- e.innerHTML=`<div class="cost">${d.cost}</div><div class="nm">${esc(d.n)}</div><div class="kw">${[...d.kw].map(k=>KWN[k]).join(' ')}</div><div class="ef">${etbText(d.etb)}</div><div class="pw">${d.pow}</div>`;return e}
+function cardEl(c,cls){const d=CARDS[c[0]];const e=el('div','card '+CIV[d.civ].c+(d.sp?' spell ':' ')+(cls||'')+(c[1]?' tp':'')+(c[2]?' sk':''));
+ e.innerHTML=`<div class="cost">${d.cost}</div><div class="nm">${esc(d.n)}</div><div class="kw">${[...d.kw].map(k=>KWN[k]).join(' ')}</div><div class="ef">${cardText(d)}</div><div class="pw">${d.sp?'呪文':d.pow}</div>`;return e}
 function manaEl(c){const d=CARDS[c[0]];return el('div','mana '+CIV[d.civ].c+(c[1]?' tp':''),CIV[d.civ].n[0])}
 function zone(label,items){const z=el('div');z.appendChild(el('div','zlabel',label));const r=el('div','zone');items.forEach(i=>r.appendChild(i));z.appendChild(r);return z}
 function canPay(card,mana){const d=CARDS[card[0]];const un=mana.filter(m=>!m[1]);return un.length>=d.cost&&un.some(m=>CARDS[m[0]].civ===d.civ)}
@@ -222,7 +272,7 @@ function renderGame(){
  // mine
  const m=$('mine');m.innerHTML='';
  m.appendChild(zone('バトルゾーン',me.bf.map((c,i)=>{const d=CARDS[c[0]];const e=cardEl(c);
-  if(iDef){if(!c[1]&&d.kw.includes('B')){e.classList.add('hl');e.onclick=()=>send({t:'block',i})}}
+  if(iDef&&pend.k==='block'){if(!c[1]&&d.kw.includes('B')){e.classList.add('hl');e.onclick=()=>send({t:'block',i})}}
   else if(myTurn&&!pend&&!c[1]&&(!c[2]||d.kw.includes('S'))){e.classList.add('hl');if(sel&&sel.k==='atk'&&sel.i===i)e.classList.add('sel');e.onclick=()=>{sel={k:'atk',i};renderGame()}}
   return e})));
  m.appendChild(zone('マナ',me.mana.map(manaEl)));
@@ -232,27 +282,54 @@ function renderGame(){
  const msg=$('msg'),acts=$('acts');acts.innerHTML='';
  const btn=(t,f,sub,dis)=>{const b=el('button',sub?'sub':'',t);b.onclick=f;if(dis)b.disabled=true;acts.appendChild(b)};
  if(V.winner!==null){msg.textContent=V.winner===ME?'🎉 あなたの勝ち!':'😢 あなたの負け…';showOver(V.winner===ME)}
+ else if(iDef&&pend.k==='trig'){const td=CARDS[pend.c];msg.textContent=`⚡ シールド・トリガー!「${td.n}」(${cardText(td)}) を使いますか?`;btn('使う',()=>send({t:'trig',use:true}));btn('使わない(手札に加える)',()=>send({t:'trig',use:false}),true)}
  else if(iDef){msg.textContent='⚠ 攻撃されています!光っているブロッカーで防ぐか、そのまま受けます。';btn('ブロックしない',()=>send({t:'noblock'}),true)}
- else if(pend){msg.textContent='相手がブロックを選んでいます…'}
+ else if(pend){msg.textContent=pend.k==='trig'?'相手がシールド・トリガーを選んでいます…':'相手がブロックを選んでいます…'}
  else if(!myTurn){msg.textContent=`${V.names[1-ME]}のターンです…`}
- else if(sel&&sel.k==='hand'&&me.hand[sel.i]){const c=me.hand[sel.i],d=CARDS[c[0]];msg.textContent=`${d.n}(${CIV[d.civ].n} コスト${d.cost} パワー${d.pow}) ${etbText(d.etb)}`;
-  btn('マナに置く',()=>send({t:'charge',i:sel.i}),false,V.mc);btn('召喚する',()=>send({t:'summon',i:sel.i}),false,!canPay(c,me.mana));btn('キャンセル',()=>{sel=null;renderGame()},true)}
+ else if(sel&&sel.k==='hand'&&me.hand[sel.i]){const c=me.hand[sel.i],d=CARDS[c[0]];msg.textContent=`${d.n}(${CIV[d.civ].n} コスト${d.cost}${d.sp?' 呪文':' パワー'+d.pow}) ${cardText(d)}`;
+  btn('マナに置く',()=>send({t:'charge',i:sel.i}),false,V.mc);btn(d.sp?'唱える':'召喚する',()=>send({t:'summon',i:sel.i}),false,!canPay(c,me.mana));btn('キャンセル',()=>{sel=null;renderGame()},true)}
  else if(sel&&sel.k==='atk'&&me.bf[sel.i]){msg.textContent='攻撃先を選んでください(赤い点線=相手のタップ中クリーチャー)';
   btn('⚔ プレイヤーを攻撃',()=>send({t:'attack',ci:sel.i,tg:'p'}));btn('キャンセル',()=>{sel=null;renderGame()},true)}
  else{msg.textContent='手札のカードを選ぶ(マナ/召喚)、または光る自分のクリーチャーで攻撃。'+(V.mc?'':' ※マナチャージ未実施');btn('ターン終了',()=>send({t:'end'}))}
  $('log').innerHTML=V.log.map(esc).join('<br>');$('log').scrollTop=1e5}
 function showOver(win){$('over').style.display='flex';$('overT').textContent=win?'🎉 勝利!':'敗北…'}
-function toLobby(){clearTimeout(aiT);clearInterval(resendT);$('over').style.display='none';$('game').style.display='none';$('lobby').style.display='block';G=null;V=null;sel=null;mode=role?'room':null;updRoom()}
+function toLobby(){clearTimeout(aiT);clearInterval(resendT);if(mode==='host'&&role==='host'){} $('over').style.display='none';$('game').style.display='none';$('lobby').style.display='block';G=null;V=null;sel=null;mode=role?'room':null;updRoom()}
 $('overB').onclick=toLobby;$('btnQuit').onclick=toLobby;
 
 // ===== ロビー =====
 let chosen=['f','w'];
-function drawPick(){const p=$('civpick');p.innerHTML='';Object.entries(CIV).forEach(([k,v])=>{const l=el('label',v.c+(chosen.includes(k)?' on':''),v.n);l.onclick=()=>{if(chosen.includes(k)){if(chosen.length>1)chosen=chosen.filter(x=>x!==k)}else{chosen.push(k);if(chosen.length>2)chosen.shift()}drawPick()};p.appendChild(l)})}
+function drawPick(){const p=$('civpick');p.innerHTML='';Object.entries(CIV).forEach(([k,v])=>{const l=el('label',v.c+(chosen.includes(k)?' on':''),v.n);l.onclick=()=>{if(chosen.includes(k)){if(chosen.length>1)chosen=chosen.filter(x=>x!==k)}else{chosen.push(k);if(chosen.length>2)chosen.shift()}drawPick();if(typeof sendHello==='function')sendHello()};p.appendChild(l)})}
 drawPick();
 const myName=()=>($('myname').value.trim()||'プレイヤー').slice(0,10);
-$('btnCpu').onclick=()=>{mode='cpu';ME=0;G=newGame([myName(),'CPU'],chosen,shuffle(Object.keys(CIV)).slice(0,2));sel=null;pushState();scheduleAI()};
+$('btnCpu').onclick=()=>{const dk=getDeck();if(!dk)return;mode='cpu';ME=0;G=newGame([myName(),'CPU'],dk,autoDeck(shuffle(Object.keys(CIV)).slice(0,2)));sel=null;pushState();scheduleAI()};
 
 let peer=null,conn=null,role=null,guestInfo=null;
+// ===== デッキ編集 =====
+let counts={},deckMode='auto',filt='all';
+try{counts=JSON.parse(localStorage.getItem('eld_deck_v1')||'{}');deckMode=localStorage.getItem('eld_mode')||'auto'}catch(e){}
+const total=()=>Object.values(counts).reduce((a,b)=>a+b,0);
+function expand(){const d=[];for(const k in counts)for(let i=0;i<counts[k];i++)d.push(+k);return d}
+function getDeck(){if(deckMode==='custom'){const d=expand();if(!okDeck(d)){toast('マイデッキは40枚ちょうど(同名4枚まで)にしてください');return null}return d}return autoDeck(chosen)}
+function getDeckQuiet(){if(deckMode==='custom'){const d=expand();return okDeck(d)?d:null}return autoDeck(chosen)}
+function updDeckInfo(){$('dcount').textContent=`(${total()}/40枚)`;$('dtotal').textContent=`${total()} / 40 枚`;$('dtotal').style.color=total()===40?'#9be08a':'#ffd866';document.querySelectorAll('input[name=dm]').forEach(r=>r.checked=r.value===deckMode)}
+function saveDeck(){try{localStorage.setItem('eld_deck_v1',JSON.stringify(counts));localStorage.setItem('eld_mode',deckMode)}catch(e){}updDeckInfo();sendHello()}
+function drawDeck(){
+ const f=$('dfilter');f.innerHTML='';[['all','全て'],['f','火'],['w','水'],['n','自然'],['l','光'],['d','闇'],['sp','呪文のみ']].forEach(([k,t])=>{const b=el('button','sub fbtn'+(filt===k?' on':''),t);b.onclick=()=>{filt=k;drawDeck()};f.appendChild(b)});
+ const g=$('dgrid');g.innerHTML='';const order=Object.keys(CIV);
+ const idx=CARDS.map((c,i)=>i).filter(i=>filt==='all'||(filt==='sp'?CARDS[i].sp:CARDS[i].civ===filt)).sort((a,b)=>order.indexOf(CARDS[a].civ)-order.indexOf(CARDS[b].civ)||CARDS[a].sp-CARDS[b].sp||CARDS[a].cost-CARDS[b].cost);
+ idx.forEach(i=>{const t=el('div','dtile');t.appendChild(cardEl([i,0,0]));const c=el('div','dctl');
+  const m=el('button','sub','−'),p=el('button','sub','＋'),n=el('span','',String(counts[i]||0));
+  m.onclick=()=>{if(counts[i]>0){counts[i]--;if(!counts[i])delete counts[i];n.textContent=counts[i]||0;saveDeck()}};
+  p.onclick=()=>{if(total()>=40){toast('40枚までです');return}if((counts[i]||0)>=4){toast('同名カードは4枚までです');return}counts[i]=(counts[i]||0)+1;n.textContent=counts[i];saveDeck()};
+  c.append(m,n,p);t.appendChild(c);g.appendChild(t)});updDeckInfo()}
+$('btnDeck').onclick=()=>{const e=$('deckEd');e.style.display=e.style.display==='none'?'block':'none';if(e.style.display==='block'){drawDeck();e.scrollIntoView()}};
+$('dClose').onclick=()=>{$('deckEd').style.display='none'};
+$('dClear').onclick=()=>{counts={};saveDeck();drawDeck()};
+$('dAuto').onclick=()=>{counts={};autoDeck(chosen).forEach(i=>counts[i]=1);saveDeck();drawDeck()};
+document.querySelectorAll('input[name=dm]').forEach(r=>r.onchange=()=>{deckMode=r.value;saveDeck()});
+function sendHello(){if(role==='guest'&&conn&&conn.open){const d=getDeckQuiet();if(d)conn.send({t:'hello',name:myName(),deck:d})}}
+updDeckInfo();
+
 function netReset(){clearInterval(resendT);try{conn&&conn.close()}catch(e){}try{peer&&peer.destroy()}catch(e){}peer=null;conn=null;role=null;guestInfo=null;if(mode==='host'||mode==='guest'||mode==='room')mode=null}
 function updRoom(){const box=$('roomBox');box.style.display=role?'block':'none';if(!role)return;
  const up=conn&&conn.open;
@@ -260,23 +337,23 @@ function updRoom(){const box=$('roomBox');box.style.display=role?'block':'none';
   $('btnStart').disabled=!(up&&guestInfo);$('btnStart').textContent=up&&guestInfo?'対戦開始':'相手を待っています…'}
  else{$('peerList').innerHTML='あなた(ゲスト)'+(up?' ― ホストに接続しました':' ― 接続中…');$('btnStart').disabled=true;$('btnStart').textContent='ホストが開始するのを待っています…'}}
 const getCode=()=>$('code').value.trim().toLowerCase().replace(/[^a-z0-9]/g,'');
-$('btnHost').onclick=()=>{const code=getCode();if(!code){toast('部屋コードを入力してください');return}
+$('btnHost').onclick=()=>{const code=getCode();if(!code){toast('部屋コードを入力してください');return}if(!getDeck())return;
  netReset();role='host';mode='room';$('netmsg').textContent='部屋を作っています…';
  peer=new Peer('elduel-'+code);
  peer.on('open',()=>{$('netmsg').textContent=`部屋「${code}」を作りました。相手に部屋コードを伝えてください。`;updRoom()});
  peer.on('error',e=>{$('netmsg').textContent=e.type==='unavailable-id'?'そのコードは使われています。別のコードにしてください。':'接続エラー: '+e.type;if(e.type==='unavailable-id')netReset()});
  peer.on('connection',c=>{if(conn&&conn.open){c.close();return}conn=c;
   c.on('data',d=>{if(!d||typeof d!=='object')return;
-   if(d.t==='hello'){guestInfo={name:String(d.name||'ゲスト').slice(0,10),civs:String(d.civs||'fw').split('').filter(x=>CIV[x])};updRoom()}
+   if(d.t==='hello'){guestInfo={name:String(d.name||'ゲスト').slice(0,10),deck:okDeck(d.deck)?d.deck:autoDeck(['f','w'])};updRoom()}
    else if(d.t==='act'&&mode==='host'&&G&&d.a&&typeof d.a==='object')apply(1,d.a)});
   c.on('close',()=>{conn=null;guestInfo=null;toast('相手が切断しました');updRoom()});updRoom()});
  updRoom()};
-$('btnJoin').onclick=()=>{const code=getCode();if(!code){toast('部屋コードを入力してください');return}
+$('btnJoin').onclick=()=>{const code=getCode();if(!code){toast('部屋コードを入力してください');return}if(!getDeck())return;
  netReset();role='guest';mode='room';$('netmsg').textContent='ホストに接続中…';
  peer=new Peer();
  peer.on('error',e=>{$('netmsg').textContent=e.type==='peer-unavailable'?'その部屋が見つかりません。コードを確認し、ホストが先に部屋を作ってください。':'接続エラー: '+e.type;if(e.type==='peer-unavailable')netReset()});
  peer.on('open',()=>{const c=peer.connect('elduel-'+code,{reliable:true});conn=c;
-  c.on('open',()=>{$('netmsg').textContent=`部屋「${code}」に入りました`;c.send({t:'hello',name:myName(),civs:chosen.join('')});updRoom()});
+  c.on('open',()=>{$('netmsg').textContent=`部屋「${code}」に入りました`;sendHello();updRoom()});
   c.on('data',d=>{if(!d||typeof d!=='object')return;
    if(d.t==='state'&&d.V){mode='guest';ME=1;V=d.V;try{renderGame()}catch(e){}}
    else if(d.t==='err')toast(String(d.m).slice(0,40))});
@@ -285,7 +362,7 @@ $('btnJoin').onclick=()=>{const code=getCode();if(!code){toast('部屋コード�
  updRoom()};
 $('btnLeave').onclick=()=>{netReset();$('netmsg').textContent='';updRoom()};
 $('btnStart').onclick=()=>{if(role!=='host'||!conn||!conn.open||!guestInfo)return;
- mode='host';ME=0;sel=null;G=newGame([myName(),guestInfo.name],chosen,guestInfo.civs);
+ const dk=getDeck();if(!dk)return;mode='host';ME=0;sel=null;G=newGame([myName(),guestInfo.name],dk,guestInfo.deck);
  pushState();clearInterval(resendT);resendT=setInterval(()=>{if(mode==='host'&&G&&G.winner===null)pushState()},4000)};
 </script>
 </body>
