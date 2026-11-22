@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>エレメント・デュエル</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#12172a;color:#f1e9cf;font-family:"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;font-size:14px}
+h1{font-size:26px;margin:0 0 4px;color:#ffd866;letter-spacing:2px}
+button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:8px 14px;background:#ffd866;color:#1b1b2b;font-weight:700}
+button.sub{background:#2c3556;color:#f1e9cf}
+button:disabled{opacity:.4;cursor:default}
+input,select{font:inherit;padding:7px 9px;border-radius:7px;border:1px solid #3b466f;background:#1d2440;color:#f1e9cf}
+.wrap{max-width:980px;margin:0 auto;padding:14px}
+.panel{background:#1b2240;border:1px solid #2f3a64;border-radius:12px;padding:14px;margin:10px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.muted{color:#aab3d4;font-size:12px}
+#toast{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#e2573b;color:#fff3d6;padding:8px 14px;border-radius:8px;display:none;z-index:9}
+/* board */
+.side{background:#171d38;border:1px solid #2a335a;border-radius:10px;padding:8px;margin:6px 0}
+.info{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;margin-bottom:6px;align-items:center}
+.info b{color:#ffd866}
+.zone{display:flex;gap:6px;flex-wrap:wrap;min-height:30px;align-items:flex-start;margin:4px 0}
+.zlabel{font-size:11px;color:#8d98c4;margin-top:4px}
+.shield{width:26px;height:36px;border-radius:5px;background:linear-gradient(135deg,#6f7bb5,#3a4478);border:1px solid #9aa5d8}
+.mana{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#14172a;border:2px solid #0006}
+.mana.tp{opacity:.35;transform:rotate(25deg)}
+.card{position:relative;width:78px;height:108px;border-radius:9px;padding:4px 4px 3px;color:#14172a;display:flex;flex-direction:column;border:2px solid #0008;font-size:10px;line-height:1.2;user-select:none;transition:transform .15s}
+.card .cost{position:absolute;top:-6px;left:-6px;background:#14172a;color:#ffd866;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;border:2px solid #ffd866}
+.card .nm{font-weight:800;margin:10px 0 2px 8px;font-size:11px}
+.card .kw{font-weight:700;color:#7a1010}
+.card .ef{flex:1;font-size:9px;opacity:.85}
+.card .pw{text-align:right;font-weight:800;font-size:13px}
+.card.tp{transform:rotate(18deg);opacity:.7}
+.card.sk::after{content:"💤";position:absolute;right:2px;top:2px;font-size:11px}
+.card.hl{outline:3px solid #ffd866;cursor:pointer}
+.card.sel{outline:3px solid #fff3b0;transform:translateY(-6px)}
+.card.tgt{outline:3px dashed #ff6b6b;cursor:pointer}
+.card.back{background:linear-gradient(135deg,#6f7bb5,#3a4478);color:transparent}
+.cf{background:#f0a090}.cw{background:#8fc4f4}.cn{background:#a4dc90}.cl{background:#f6e59a}.cd{background:#c8a6e6}
+.bar{background:#222b52;border:1px solid #ffd86655;border-radius:10px;padding:10px;margin:8px 0;min-height:56px}
+.log{font-size:12px;color:#aab3d4;margin-top:6px;max-height:80px;overflow:auto}
+#over{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:8}
+#over div{background:#1b2240;border:2px solid #ffd866;border-radius:14px;padding:26px 34px;text-align:center}
+#over h2{color:#ffd866;margin:0 0 14px;font-size:26px}
+.civpick{display:flex;gap:6px;flex-wrap:wrap}
+.civpick label{padding:6px 10px;border-radius:8px;cursor:pointer;color:#14172a;font-weight:700;opacity:.45}
+.civpick input{display:none}
+.civpick label.on{opacity:1;outline:3px solid #ffd866}
+@media(max-width:560px){.card{width:64px;height:96px;font-size:9px}.card .nm{font-size:10px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+ <h1>⚔ エレメント・デュエル</h1>
+ <div class="muted">火・水・自然・光・闇の5文明で戦う対戦カードゲーム(2人対戦 / CPU対戦)</div>
+
+ <div id="lobby">
+  <div class="panel">
+   <div class="row"><b>名前</b><input id="myname" maxlength="10" value="プレイヤー" style="width:140px"></div>
+   <p style="margin:12px 0 6px"><b>デッキの文明を2つ選ぶ</b>(各文明10種×2枚=40枚)</p>
+   <div class="civpick" id="civpick"></div>
+   <div class="row" style="margin-top:14px">
+    <button id="btnCpu">🤖 CPUと対戦</button>
+   </div>
+  </div>
+  <div class="panel">
+   <b>🌐 オンライン対戦(2人・別のPCでもOK)</b>
+   <div class="muted" style="margin:4px 0 8px">1人が「部屋を作る」、もう1人が同じ部屋コードで「部屋に入る」。ログイン不要で、このページのURLを開くだけで遊べます。</div>
+   <div class="row">
+    <input id="code" placeholder="部屋コード(例 1234)" maxlength="12" style="width:170px">
+    <button id="btnHost" class="sub">部屋を作る(ホスト)</button>
+    <button id="btnJoin" class="sub">部屋に入る(ゲスト)</button>
+   </div>
+   <div id="netmsg" class="muted" style="margin-top:8px"></div>
+   <div id="roomBox" style="display:none;margin-top:10px">
+    <div id="peerList"></div>
+    <div class="row" style="margin-top:8px"><button id="btnStart" disabled>対戦開始</button><button id="btnLeave" class="sub">退室</button></div>
+   </div>
+  </div>
+  <div class="panel muted">
+   <b style="color:#ffd866">ルール</b><br>
+   ・シールド5枚、手札5枚で開始。相手のシールドを全て割って、直接攻撃で勝利。<br>
+   ・毎ターン:カードを1枚引く → マナに1枚置く(1ターン1回) → クリーチャーを召喚(コスト分のマナをタップ、その文明のマナが1つ以上必要) → 攻撃。<br>
+   ・攻撃先はプレイヤーか相手のタップ中クリーチャー。パワーが高い方が勝ち、同じなら相打ち。<br>
+   ・ブロッカー:攻撃されたとき、タップしていなければ身代わりに戦える。<br>
+   ・スピードアタッカー:出したターンから攻撃可。Wブレイカー:シールドを2枚割る。召喚酔い 💤 のクリーチャーは攻撃不可。<br>
+   ・登場時効果の対象は自動で選ばれます(最もパワーの高い対象)。山札が尽きると負け。
+  </div>
+ </div>
+
+ <div id="game" style="display:none">
+  <div class="side" id="opp"></div>
+  <div class="bar"><div id="msg"></div><div id="acts" class="row" style="margin-top:8px"></div><div class="log" id="log"></div></div>
+  <div class="side" id="mine"></div>
+  <button class="sub" id="btnQuit" style="margin-top:6px">ロビーへ戻る</button>
+ </div>
+</div>
+<div id="toast"></div>
+<div id="over"><div><h2 id="overT"></h2><button id="overB">ロビーへ</button></div></div>
+
+<script>
+// ===== カードデータ =====
+const CIV={f:{n:'火',c:'cf',col:'#f0a090'},w:{n:'水',c:'cw',col:'#8fc4f4'},n:{n:'自然',c:'cn',col:'#a4dc90'},l:{n:'光',c:'cl',col:'#f6e59a'},d:{n:'闇',c:'cd',col:'#c8a6e6'}};
+const RAW=[
+['f','ヒノコ・ファイター',2,2000,'S'],['f','アカネ・ブレイズ',3,3000],['f','ガンバ・ソルジャー',3,2000,'S'],['f','ホムラ・ウォリアー',4,4000,'',['kill',2000]],['f','バーン・ラプター',4,3000,'S'],
+['f','ドラゴン・キッド',5,5000,'W'],['f','ヘルファイア・ナイト',6,6000,'W'],['f','ガトリング・ゴブリン',5,4000,'',['kill',3000]],['f','フレア・ドレイク',7,8000,'SW'],['f','炎帝ボルカニック',8,9000,'W',['kill',5000]],
+['w','ミズタマ・スライム',2,1000,'',['draw',1]],['w','ナミノリ・ペンギン',3,2000,'',['draw',1]],['w','アクア・ガーディアン',3,3000,'B'],['w','シーホース・ナイト',4,3000,'',['draw',1]],['w','潮流の賢者',5,3000,'',['draw',2]],
+['w','ディープ・シャーク',5,5000],['w','氷結のクラーゲン',4,2000,'',['tap',0]],['w','蒼海の守護神',6,6000,'B'],['w','大渦のクラーケン',7,7000,'',['tap',0]],['w','海神リヴァイアサン',8,8000,'W',['draw',2]],
+['n','ミドリ・スプラウト',1,1000,'',['ramp',0]],['n','モリノ・ゴブリン',2,2000,'',['ramp',0]],['n','ツタ・ウルフ',3,3000],['n','大地の巨人',4,5000],['n','フォレスト・ガード',4,4000,'B'],
+['n','ハチミツ・ベア',4,4000,'',['ramp',0]],['n','古樹エルダー',5,6000],['n','ジャングル・キング',6,7000,'W'],['n','森羅の竜',7,7000,'W',['ramp',0]],['n','世界樹ユグドラ',8,9000,'BW',['ramp',0]],
+['l','ヒカリ・エンジェル',2,1000,'B'],['l','聖騎士ルミナ',3,3000],['l','光の盾兵',3,2000,'B'],['l','治癒の天使',4,3000,'',['shield',0]],['l','ホーリー・ランサー',4,4000,'S'],
+['l','天空の審判',5,5000,'B'],['l','白銀のパラディン',5,4000,'',['tap',0]],['l','聖なる大天使',6,6000,'W'],['l','光輝の聖竜',7,8000,'BW'],['l','創世神ゼウス・ライト',8,9000,'W',['shield',0]],
+['d','ヤミ・コウモリ',2,1000,'',['disc',0]],['d','ゾンビ・ソルジャー',3,3000],['d','暗黒の剣士',3,2000,'S'],['d','影のアサシン',4,3000,'',['kill',3000]],['d','ボーン・ドラゴン',5,5000],
+['d','死神グリム',5,4000,'',['kill',4000]],['d','魔王の使い',6,6000,'W'],['d','ナイトメア・デーモン',6,5000,'',['disc',0]],['d','冥界竜',7,8000,'W'],['d','闇帝ダークネス',8,9000,'W',['kill',6000]]
+];
+const CARDS=RAW.map(r=>({civ:r[0],n:r[1],cost:r[2],pow:r[3],kw:r[4]||'',etb:r[5]||null}));
+const KWN={B:'ブロッカー',S:'スピードアタッカー',W:'Wブレイカー'};
+function etbText(e){if(!e)return'';const[t,n]=e;return{draw:`登場時:${n}枚引く`,ramp:'登場時:山札の上をマナへ',kill:`登場時:パワー${n}以下の敵を破壊`,tap:'登場時:敵1体をタップ',disc:'登場時:相手の手札を1枚捨てる',shield:'登場時:山札の上をシールドへ'}[t]}
+
+// ===== ゲームエンジン(ホストのみ実行) =====
+const R=n=>Math.floor(Math.random()*n);
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=R(i+1);[a[i],a[j]]=[a[j],a[i]]}return a};
+let UID=1;
+const mk=c=>({c,u:UID++,tp:0,sk:0});
+function normCivs(c){c=[...new Set(c)];const all=Object.keys(CIV);while(c.length<2){const x=all[R(5)];if(!c.includes(x))c.push(x)}return c.slice(0,2)}
+function buildDeck(civs){const d=[];CARDS.forEach((x,i)=>{if(civs.includes(x.civ)){d.push(mk(i));d.push(mk(i))}});return shuffle(d)}
+function mkP(civs){const deck=buildDeck(normCivs(civs));const sh=deck.splice(0,5),hand=deck.splice(0,5);return{deck,sh,hand,mana:[],bf:[],gv:[]}}
+function lg(S,t){S.log.push(t);if(S.log.length>30)S.log.shift()}
+function newGame(names,civsA,civsB){const S={turn:0,winner:null,pend:null,mc:0,log:[],names,first:true,p:[mkP(civsA),mkP(civsB)]};lg(S,'ゲーム開始!');startTurn(S);return S}
+function draw(S,pi){const p=S.p[pi];if(!p.deck.length){S.winner=1-pi;lg(S,`${S.names[pi]}は山札が尽きた!`);return}p.hand.push(p.deck.shift())}
+function startTurn(S){const p=S.p[S.turn];p.mana.forEach(m=>m.tp=0);p.bf.forEach(b=>{b.tp=0;b.sk=0});S.mc=0;lg(S,`── ${S.names[S.turn]}のターン ──`);if(S.first)S.first=false;else draw(S,S.turn)}
+function kill(S,o,u){const p=S.p[o],i=p.bf.findIndex(x=>x.u===u);if(i<0)return;const c=p.bf.splice(i,1)[0];p.gv.push(c);lg(S,`${CARDS[c.c].n}が破壊された`)}
+function battle(S,ao,x,dof,y){const px=CARDS[x.c].pow,py=CARDS[y.c].pow;lg(S,`${CARDS[x.c].n}(${px}) vs ${CARDS[y.c].n}(${py})`);if(px>py)kill(S,dof,y.u);else if(px<py)kill(S,ao,x.u);else{kill(S,dof,y.u);kill(S,ao,x.u)}}
+function breakSh(S,ap,x){const d=S.p[1-ap];if(!d.sh.length){S.winner=ap;lg(S,`${S.names[ap]}のダイレクトアタック!`);return}const n=CARDS[x.c].kw.includes('W')?2:1;for(let i=0;i<n&&d.sh.length;i++)d.hand.push(d.sh.shift());lg(S,`${S.names[1-ap]}のシールドを${n>1?'2枚':'1枚'}ブレイク!`)}
+function resolveAtk(S,blockU){const pd=S.pend;S.pend=null;const x=S.p[pd.ap].bf.find(b=>b.u===pd.a);if(!x)return null;if(blockU){const y=S.p[pd.d].bf.find(b=>b.u===blockU);lg(S,'ブロック!');battle(S,pd.ap,x,pd.d,y)}else breakSh(S,pd.ap,x);return null}
+function etb(S,pi,e){if(!e)return;const[t,n]=e,me=S.p[pi],op=S.p[1-pi];
+ if(t==='draw')for(let i=0;i<n;i++)draw(S,pi);
+ else if(t==='ramp'){if(me.deck.length){const m=me.deck.shift();m.tp=1;me.mana.push(m);lg(S,'マナが増えた')}}
+ else if(t==='kill'){const c=op.bf.filter(b=>CARDS[b.c].pow<=n).sort((a,b)=>CARDS[b.c].pow-CARDS[a.c].pow)[0];if(c)kill(S,1-pi,c.u)}
+ else if(t==='tap'){const c=op.bf.filter(b=>!b.tp).sort((a,b)=>CARDS[b.c].pow-CARDS[a.c].pow)[0];if(c){c.tp=1;lg(S,`${CARDS[c.c].n}がタップされた`)}}
+ else if(t==='disc'){if(op.hand.length){const c=op.hand.splice(R(op.hand.length),1)[0];op.gv.push(c);lg(S,`手札を1枚捨てさせた`)}}
+ else if(t==='shield'){if(me.deck.length){me.sh.push(me.deck.shift());lg(S,'シールドが増えた')}}}
+function act(S,pi,a){
+ if(S.winner!==null)return'ゲームは終了しています';
+ if(S.pend){if(pi!==S.pend.d)return'相手の選択待ちです';const d=S.p[pi];
+  if(a.t==='noblock')return resolveAtk(S,null);
+  if(a.t==='block'){const b=d.bf[a.i];if(!b||b.tp||!CARDS[b.c].kw.includes('B'))return'ブロックできません';return resolveAtk(S,b.u)}
+  return'ブロックするか選んでください'}
+ if(pi!==S.turn)return'あなたのターンではありません';
+ const me=S.p[pi],op=S.p[1-pi];
+ if(a.t==='charge'){if(S.mc)return'マナチャージは1ターンに1回です';const c=me.hand[a.i];if(!c)return'カードがありません';me.hand.splice(a.i,1);c.tp=0;me.mana.push(c);S.mc=1;lg(S,`${S.names[pi]}がマナを置いた`);return null}
+ if(a.t==='summon'){const c=me.hand[a.i];if(!c)return'カードがありません';const d=CARDS[c.c];const un=me.mana.filter(m=>!m.tp);
+  if(un.length<d.cost)return'マナが足りません';
+  const first=un.find(m=>CARDS[m.c].civ===d.civ);if(!first)return`${CIV[d.civ].n}文明のマナが必要です`;
+  first.tp=1;const rest=un.filter(m=>m!==first).sort((p,q)=>(CARDS[p.c].civ===d.civ)-(CARDS[q.c].civ===d.civ));
+  for(let i=0;i<d.cost-1;i++)rest[i].tp=1;
+  me.hand.splice(a.i,1);c.tp=0;c.sk=1;me.bf.push(c);lg(S,`${S.names[pi]}が${d.n}を召喚`);etb(S,pi,d.etb);return null}
+ if(a.t==='attack'){const x=me.bf[a.ci];if(!x||x.tp)return'攻撃できません';if(x.sk&&!CARDS[x.c].kw.includes('S'))return'召喚酔い中です';
+  if(a.tg==='c'){const y=op.bf[a.ti];if(!y||!y.tp)return'タップ中のクリーチャーだけ攻撃できます';x.tp=1;battle(S,pi,x,1-pi,y);return null}
+  x.tp=1;S.pend={a:x.u,d:1-pi,ap:pi};lg(S,`${CARDS[x.c].n}がプレイヤーを攻撃!`);
+  if(!op.bf.some(b=>!b.tp&&CARDS[b.c].kw.includes('B')))return resolveAtk(S,null);return null}
+ if(a.t==='end'){S.turn=1-S.turn;startTurn(S);return null}
+ return'不明な操作'}
+const w=c=>[c.c,c.tp,c.sk,c.u];
+function view(S,v){return{turn:S.turn,winner:S.winner,pend:S.pend?{d:S.pend.d}:null,mc:S.mc,log:S.log.slice(-6),names:S.names,
+ p:S.p.map((p,i)=>({sh:p.sh.length,hand:i===v?p.hand.map(w):p.hand.length,mana:p.mana.map(w),bf:p.bf.map(w),dn:p.deck.length,gv:p.gv.length}))}}
+
+// ===== CPU =====
+function aiStep(){const S=G;if(!S||S.winner!==null||mode!=='cpu')return;const me=S.p[1],op=S.p[0];
+ if(S.pend){if(S.pend.d!==1)return;const bs=me.bf.map((b,i)=>[b,i]).filter(([b])=>!b.tp&&CARDS[b.c].kw.includes('B')).sort((a,b)=>CARDS[b[0].c].pow-CARDS[a[0].c].pow);
+  return apply(1,bs.length&&Math.random()<.75?{t:'block',i:bs[0][1]}:{t:'noblock'})}
+ if(S.turn!==1)return;
+ if(!S.mc&&me.hand.length){const have=new Set(me.mana.map(m=>CARDS[m.c].civ));
+  let idx=me.hand.findIndex(c=>!have.has(CARDS[c.c].civ));
+  if(idx<0){idx=0;me.hand.forEach((c,i)=>{if(CARDS[c.c].cost>CARDS[me.hand[idx].c].cost)idx=i})}
+  return apply(1,{t:'charge',i:idx})}
+ const un=me.mana.filter(m=>!m.tp);let best=-1;
+ me.hand.forEach((c,i)=>{const d=CARDS[c.c];if(un.length>=d.cost&&un.some(m=>CARDS[m.c].civ===d.civ)&&(best<0||d.cost>CARDS[me.hand[best].c].cost))best=i});
+ if(best>=0)return apply(1,{t:'summon',i:best});
+ for(let i=0;i<me.bf.length;i++){const x=me.bf[i];if(x.tp||(x.sk&&!CARDS[x.c].kw.includes('S')))continue;const px=CARDS[x.c].pow;
+  const tg=op.bf.map((b,j)=>[b,j]).filter(([b])=>b.tp&&CARDS[b.c].pow<px).sort((a,b)=>CARDS[b[0].c].pow-CARDS[a[0].c].pow)[0];
+  if(tg)return apply(1,{t:'attack',ci:i,tg:'c',ti:tg[1]});
+  const bl=op.bf.filter(b=>!b.tp&&CARDS[b.c].kw.includes('B')&&CARDS[b.c].pow>px).length;
+  if(bl&&op.sh.length>2&&Math.random()<.5)continue;
+  return apply(1,{t:'attack',ci:i,tg:'p'})}
+ apply(1,{t:'end'})}
+let aiT=null;
+function scheduleAI(){if(mode!=='cpu'||!G||G.winner!==null)return;if((G.turn===1&&!G.pend)||(G.pend&&G.pend.d===1)){clearTimeout(aiT);aiT=setTimeout(aiStep,850)}}
+
+// ===== 通信・状態 =====
+let G=null,mode=null,ME=0,V=null,resendT=null;
+const $=id=>document.getElementById(id);
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2000)}
+function apply(pi,a){const err=act(G,pi,a);if(err){if(pi===ME||mode==='cpu'&&pi===0)toast(err);else if(mode==='host'&&conn&&conn.open)conn.send({t:'err',m:err});return}pushState();scheduleAI()}
+function pushState(){V=view(G,0);ME=0;renderGame();
+ if(mode==='host'&&conn&&conn.open)conn.send({t:'state',V:view(G,1)})}
+function send(a){sel=null;if(mode==='guest'){if(conn&&conn.open)conn.send({t:'act',a});else toast('接続が切れています')}else apply(0,a)}
+
+// ===== 画面 =====
+let sel=null;
+function el(tag,cls,html){const e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function cardEl(c,cls){const d=CARDS[c[0]];const e=el('div','card '+CIV[d.civ].c+' '+(cls||'')+(c[1]?' tp':'')+(c[2]?' sk':''));
+ e.innerHTML=`<div class="cost">${d.cost}</div><div class="nm">${esc(d.n)}</div><div class="kw">${[...d.kw].map(k=>KWN[k]).join(' ')}</div><div class="ef">${etbText(d.etb)}</div><div class="pw">${d.pow}</div>`;return e}
+function manaEl(c){const d=CARDS[c[0]];return el('div','mana '+CIV[d.civ].c+(c[1]?' tp':''),CIV[d.civ].n[0])}
+function zone(label,items){const z=el('div');z.appendChild(el('div','zlabel',label));const r=el('div','zone');items.forEach(i=>r.appendChild(i));z.appendChild(r);return z}
+function canPay(card,mana){const d=CARDS[card[0]];const un=mana.filter(m=>!m[1]);return un.length>=d.cost&&un.some(m=>CARDS[m[0]].civ===d.civ)}
+
+function renderGame(){
+ if(!V)return;if(V.winner===null)$('over').style.display='none';$('lobby').style.display='none';$('game').style.display='block';
+ const me=V.p[ME],op=V.p[1-ME],myTurn=V.turn===ME&&V.winner===null,pend=V.pend,iDef=pend&&pend.d===ME;
+ // opponent
+ const o=$('opp');o.innerHTML='';
+ o.appendChild(el('div','info',`<b>${esc(V.names[1-ME])}</b><span>🛡 ${op.sh}</span><span>山札 ${op.dn}</span><span>手札 ${op.hand}</span><span>墓地 ${op.gv}</span>${V.turn===1-ME?'<b>◀ 相手のターン</b>':''}`));
+ const sh=[];for(let i=0;i<op.sh;i++)sh.push(el('div','shield'));o.appendChild(zone('シールド',sh));
+ o.appendChild(zone('マナ',op.mana.map(manaEl)));
+ const atkSel=sel&&sel.k==='atk';
+ o.appendChild(zone('バトルゾーン',op.bf.map((c,i)=>{const e=cardEl(c);if(atkSel&&c[1]&&myTurn){e.classList.add('tgt');e.onclick=()=>send({t:'attack',ci:sel.i,tg:'c',ti:i})}return e})));
+ // mine
+ const m=$('mine');m.innerHTML='';
+ m.appendChild(zone('バトルゾーン',me.bf.map((c,i)=>{const d=CARDS[c[0]];const e=cardEl(c);
+  if(iDef){if(!c[1]&&d.kw.includes('B')){e.classList.add('hl');e.onclick=()=>send({t:'block',i})}}
+  else if(myTurn&&!pend&&!c[1]&&(!c[2]||d.kw.includes('S'))){e.classList.add('hl');if(sel&&sel.k==='atk'&&sel.i===i)e.classList.add('sel');e.onclick=()=>{sel={k:'atk',i};renderGame()}}
+  return e})));
+ m.appendChild(zone('マナ',me.mana.map(manaEl)));
+ m.appendChild(zone('手札',me.hand.map((c,i)=>{const e=cardEl(c);if(myTurn&&!pend){e.classList.add('hl');if(sel&&sel.k==='hand'&&sel.i===i)e.classList.add('sel');e.onclick=()=>{sel={k:'hand',i};renderGame()}}return e})));
+ m.appendChild(el('div','info',`<b>${esc(V.names[ME])}</b><span>🛡 ${me.sh}</span><span>山札 ${me.dn}</span><span>墓地 ${me.gv}</span>${myTurn?'<b>◀ あなたのターン</b>':''}`));
+ // bar
+ const msg=$('msg'),acts=$('acts');acts.innerHTML='';
+ const btn=(t,f,sub,dis)=>{const b=el('button',sub?'sub':'',t);b.onclick=f;if(dis)b.disabled=true;acts.appendChild(b)};
+ if(V.winner!==null){msg.textContent=V.winner===ME?'🎉 あなたの勝ち!':'😢 あなたの負け…';showOver(V.winner===ME)}
+ else if(iDef){msg.textContent='⚠ 攻撃されています!光っているブロッカーで防ぐか、そのまま受けます。';btn('ブロックしない',()=>send({t:'noblock'}),true)}
+ else if(pend){msg.textContent='相手がブロックを選んでいます…'}
+ else if(!myTurn){msg.textContent=`${V.names[1-ME]}のターンです…`}
+ else if(sel&&sel.k==='hand'&&me.hand[sel.i]){const c=me.hand[sel.i],d=CARDS[c[0]];msg.textContent=`${d.n}(${CIV[d.civ].n} コスト${d.cost} パワー${d.pow}) ${etbText(d.etb)}`;
+  btn('マナに置く',()=>send({t:'charge',i:sel.i}),false,V.mc);btn('召喚する',()=>send({t:'summon',i:sel.i}),false,!canPay(c,me.mana));btn('キャンセル',()=>{sel=null;renderGame()},true)}
+ else if(sel&&sel.k==='atk'&&me.bf[sel.i]){msg.textContent='攻撃先を選んでください(赤い点線=相手のタップ中クリーチャー)';
+  btn('⚔ プレイヤーを攻撃',()=>send({t:'attack',ci:sel.i,tg:'p'}));btn('キャンセル',()=>{sel=null;renderGame()},true)}
+ else{msg.textContent='手札のカードを選ぶ(マナ/召喚)、または光る自分のクリーチャーで攻撃。'+(V.mc?'':' ※マナチャージ未実施');btn('ターン終了',()=>send({t:'end'}))}
+ $('log').innerHTML=V.log.map(esc).join('<br>');$('log').scrollTop=1e5}
+function showOver(win){$('over').style.display='flex';$('overT').textContent=win?'🎉 勝利!':'敗北…'}
+function toLobby(){clearTimeout(aiT);clearInterval(resendT);$('over').style.display='none';$('game').style.display='none';$('lobby').style.display='block';G=null;V=null;sel=null;mode=role?'room':null;updRoom()}
+$('overB').onclick=toLobby;$('btnQuit').onclick=toLobby;
+
+// ===== ロビー =====
+let chosen=['f','w'];
+function drawPick(){const p=$('civpick');p.innerHTML='';Object.entries(CIV).forEach(([k,v])=>{const l=el('label',v.c+(chosen.includes(k)?' on':''),v.n);l.onclick=()=>{if(chosen.includes(k)){if(chosen.length>1)chosen=chosen.filter(x=>x!==k)}else{chosen.push(k);if(chosen.length>2)chosen.shift()}drawPick()};p.appendChild(l)})}
+drawPick();
+const myName=()=>($('myname').value.trim()||'プレイヤー').slice(0,10);
+$('btnCpu').onclick=()=>{mode='cpu';ME=0;G=newGame([myName(),'CPU'],chosen,shuffle(Object.keys(CIV)).slice(0,2));sel=null;pushState();scheduleAI()};
+
+let peer=null,conn=null,role=null,guestInfo=null;
+function netReset(){clearInterval(resendT);try{conn&&conn.close()}catch(e){}try{peer&&peer.destroy()}catch(e){}peer=null;conn=null;role=null;guestInfo=null;if(mode==='host'||mode==='guest'||mode==='room')mode=null}
+function updRoom(){const box=$('roomBox');box.style.display=role?'block':'none';if(!role)return;
+ const up=conn&&conn.open;
+ if(role==='host'){$('peerList').innerHTML='👑 あなた(ホスト)<br>'+(up&&guestInfo?'ゲスト:'+esc(guestInfo.name):'<span class="muted">ゲストを待っています…</span>');
+  $('btnStart').disabled=!(up&&guestInfo);$('btnStart').textContent=up&&guestInfo?'対戦開始':'相手を待っています…'}
+ else{$('peerList').innerHTML='あなた(ゲスト)'+(up?' ― ホストに接続しました':' ― 接続中…');$('btnStart').disabled=true;$('btnStart').textContent='ホストが開始するのを待っています…'}}
+const getCode=()=>$('code').value.trim().toLowerCase().replace(/[^a-z0-9]/g,'');
+$('btnHost').onclick=()=>{const code=getCode();if(!code){toast('部屋コードを入力してください');return}
+ netReset();role='host';mode='room';$('netmsg').textContent='部屋を作っています…';
+ peer=new Peer('elduel-'+code);
+ peer.on('open',()=>{$('netmsg').textContent=`部屋「${code}」を作りました。相手に部屋コードを伝えてください。`;updRoom()});
+ peer.on('error',e=>{$('netmsg').textContent=e.type==='unavailable-id'?'そのコードは使われています。別のコードにしてください。':'接続エラー: '+e.type;if(e.type==='unavailable-id')netReset()});
+ peer.on('connection',c=>{if(conn&&conn.open){c.close();return}conn=c;
+  c.on('data',d=>{if(!d||typeof d!=='object')return;
+   if(d.t==='hello'){guestInfo={name:String(d.name||'ゲスト').slice(0,10),civs:String(d.civs||'fw').split('').filter(x=>CIV[x])};updRoom()}
+   else if(d.t==='act'&&mode==='host'&&G&&d.a&&typeof d.a==='object')apply(1,d.a)});
+  c.on('close',()=>{conn=null;guestInfo=null;toast('相手が切断しました');updRoom()});updRoom()});
+ updRoom()};
+$('btnJoin').onclick=()=>{const code=getCode();if(!code){toast('部屋コードを入力してください');return}
+ netReset();role='guest';mode='room';$('netmsg').textContent='ホストに接続中…';
+ peer=new Peer();
+ peer.on('error',e=>{$('netmsg').textContent=e.type==='peer-unavailable'?'その部屋が見つかりません。コードを確認し、ホストが先に部屋を作ってください。':'接続エラー: '+e.type;if(e.type==='peer-unavailable')netReset()});
+ peer.on('open',()=>{const c=peer.connect('elduel-'+code,{reliable:true});conn=c;
+  c.on('open',()=>{$('netmsg').textContent=`部屋「${code}」に入りました`;c.send({t:'hello',name:myName(),civs:chosen.join('')});updRoom()});
+  c.on('data',d=>{if(!d||typeof d!=='object')return;
+   if(d.t==='state'&&d.V){mode='guest';ME=1;V=d.V;try{renderGame()}catch(e){}}
+   else if(d.t==='err')toast(String(d.m).slice(0,40))});
+  c.on('close',()=>{toast('ホストと切断されました');conn=null;updRoom()});
+  setTimeout(()=>{if(conn&&!conn.open){$('netmsg').textContent='接続できません。ネットワークを確認してやり直してください。'}},12000)});
+ updRoom()};
+$('btnLeave').onclick=()=>{netReset();$('netmsg').textContent='';updRoom()};
+$('btnStart').onclick=()=>{if(role!=='host'||!conn||!conn.open||!guestInfo)return;
+ mode='host';ME=0;sel=null;G=newGame([myName(),guestInfo.name],chosen,guestInfo.civs);
+ pushState();clearInterval(resendT);resendT=setInterval(()=>{if(mode==='host'&&G&&G.winner===null)pushState()},4000)};
+</script>
+</body>
+</html>
